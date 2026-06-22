@@ -17,6 +17,7 @@ Field model (the only state that matters):
 import json
 import re
 import sys
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -187,20 +188,33 @@ class TemplateEditor(tk.Tk):
             return
 
         self.psd_path    = Path(path)
-        self.layers      = inspect_psd(str(self.psd_path))
-        self.layer_index = {l["name"]: l for l in self.layers}
-        self.fields      = {l["name"]: make_field(l) for l in self.layers}
-        self.selected_layer = None
+        self.psd_label.config(text=f"Loading: {self.psd_path.name}...")
 
-        self.psd_label.config(text=f"Loaded: {self.psd_path.name}")
+        # Render in background thread to prevent UI freeze
+        thread = threading.Thread(target=self._load_psd_bg, args=(str(self.psd_path),), daemon=True)
+        thread.start()
 
-        self._base_img = None
-        self._last_img = None
+    def _load_psd_bg(self, psd_path: str):
+        """Background thread: inspect and composite PSD."""
         try:
-            self._base_img = Image.open(BytesIO(render(str(self.psd_path)))).convert("RGBA")
-        except Exception as e:
-            messagebox.showerror("Render error", f"Could not composite PSD:\n{e}")
+            self.layers      = inspect_psd(psd_path)
+            self.layer_index = {l["name"]: l for l in self.layers}
+            self.fields      = {l["name"]: make_field(l) for l in self.layers}
+            self.selected_layer = None
 
+            self._base_img = None
+            self._last_img = None
+            self._base_img = Image.open(BytesIO(render(psd_path))).convert("RGBA")
+
+            # Update UI on main thread
+            self.after(0, self._on_psd_loaded)
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror("Render error", f"Could not composite PSD:\n{e}"))
+            self.after(0, lambda: self.psd_label.config(text="No PSD loaded"))
+
+    def _on_psd_loaded(self):
+        """Main thread: update UI after PSD is loaded."""
+        self.psd_label.config(text=f"Loaded: {self.psd_path.name}")
         self._populate_layer_list()
         self._update_preview()
 
@@ -458,16 +472,29 @@ class TemplateLoader(tk.Tk):
             messagebox.showerror("Error", f"PSD not found: {self.psd_path}")
             return
 
-        self.psd_layers = inspect_psd(str(self.psd_path))
+        self.template_label.config(text=f"Loading: {Path(path).name}...")
 
-        self._base_img = None
-        self._last_img = None
+        # Render in background thread
+        thread = threading.Thread(target=self._load_template_bg, args=(str(self.psd_path), Path(path).name), daemon=True)
+        thread.start()
+
+    def _load_template_bg(self, psd_path: str, template_name: str):
+        """Background thread: inspect and composite template PSD."""
         try:
-            self._base_img = Image.open(BytesIO(render(str(self.psd_path)))).convert("RGBA")
-        except Exception as e:
-            messagebox.showerror("Render error", str(e))
+            self.psd_layers = inspect_psd(psd_path)
+            self._base_img = None
+            self._last_img = None
+            self._base_img = Image.open(BytesIO(render(psd_path))).convert("RGBA")
 
-        self.template_label.config(text=f"Loaded: {Path(path).name}")
+            # Update UI on main thread
+            self.after(0, lambda: self._on_template_loaded(template_name))
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror("Render error", str(e)))
+            self.after(0, lambda: self.template_label.config(text="No template loaded"))
+
+    def _on_template_loaded(self, template_name: str):
+        """Main thread: update UI after template is loaded."""
+        self.template_label.config(text=f"Loaded: {template_name}")
         self._build_form()
         self._update_preview()
 
