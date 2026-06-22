@@ -4,7 +4,7 @@ APP = ['app.py']
 OPTIONS = {
     'argv_emulation': False,
     'packages': ['PIL', 'psd_tools', 'skimage', 'scipy', 'tkinter'],
-    'iconfile': None,
+    'iconfile': 'idgen.icns',
     'plist': {
         'CFBundleName': 'idgen',
         'CFBundleDisplayName': 'idgen',
