@@ -1,0 +1,11 @@
+{
+  "name": "id-generator-clean",
+  "version": "1.0.0",
+  "main": "scripts/psd-to-json.js",
+  "scripts": {
+    "convert": "node scripts/psd-to-json.js"
+  },
+  "dependencies": {
+    "psd": "^3.0.0"
+  }
+}
