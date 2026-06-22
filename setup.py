@@ -3,7 +3,7 @@ from setuptools import setup
 APP = ['app.py']
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['PIL', 'psd_tools', 'tkinter'],
+    'packages': ['PIL', 'psd_tools', 'skimage', 'tkinter'],
     'iconfile': None,
     'plist': {
         'CFBundleName': 'idgen',
