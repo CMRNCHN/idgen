@@ -3,7 +3,15 @@ from setuptools import setup
 APP = ['app.py']
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['PIL', 'psd_tools', 'skimage', 'scipy', 'tkinter'],
+    'packages': [
+        'PIL', 'psd_tools', 'skimage', 'scipy', 'tkinter',
+        'numpy', 'attrs', 'typing_extensions', 'imageio',
+        'lazy_loader', 'networkx', 'packaging', 'tifffile'
+    ],
+    'excludes': [
+        'aggdraw.py',
+        'aggdraw',
+    ],  # aggdraw bundles as .so, don't wrap it as .py
     'iconfile': 'idgen.icns',
     'plist': {
         'CFBundleName': 'idgen',
