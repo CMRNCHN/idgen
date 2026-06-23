@@ -421,6 +421,7 @@ class TemplateLoader(tk.Tk):
         self.form_vars  = {}   # layer_name → StringVar (text fields)
         self.image_vars = {}   # layer_name → StringVar (image path)
         self.preview_tk = None
+        self._preview_timer = None  # debounce timer
 
         self._build_ui()
 
@@ -524,7 +525,7 @@ class TemplateLoader(tk.Tk):
 
             if layer["type"] == "TypeLayer":
                 var = tk.StringVar(value=field.get("value", ""))
-                var.trace_add("write", lambda *a: self._update_preview())
+                var.trace_add("write", lambda *a: self._debounce_preview_update())
                 self.form_vars[layer_name] = var
                 ttk.Label(box, text="Text:").pack(anchor="w")
                 ttk.Entry(box, textvariable=var, width=40).pack(fill=tk.X)
@@ -543,18 +544,30 @@ class TemplateLoader(tk.Tk):
                     if p:
                         v.set(p)
                         l.config(text=Path(p).name)
-                        self._update_preview()
+                        self._debounce_preview_update()
 
                 ttk.Button(row, text="Browse", command=pick).pack(side=tk.LEFT, padx=5)
 
-    def _update_preview(self):
+    def _debounce_preview_update(self):
+        """Debounce preview updates to avoid re-rendering on every keystroke."""
+        if self._preview_timer is not None:
+            self.after_cancel(self._preview_timer)
+        self._preview_timer = self.after(500, self._update_preview_bg)
+
+    def _update_preview_bg(self):
+        """Render preview in background thread to keep UI responsive."""
+        self._preview_timer = None
         if not self.psd_path or not self.template:
             return
+        thread = threading.Thread(target=self._render_preview_thread, daemon=True)
+        thread.start()
 
-        values       = {n: v.get() for n, v in self.form_vars.items()}
-        image_values = {n: v.get() for n, v in self.image_vars.items() if v.get()}
-
+    def _render_preview_thread(self):
+        """Background thread: render preview with current values."""
         try:
+            values       = {n: v.get() for n, v in self.form_vars.items()}
+            image_values = {n: v.get() for n, v in self.image_vars.items() if v.get()}
+
             if values or image_values:
                 raw = render(str(self.psd_path),
                              values=values or None,
@@ -577,9 +590,14 @@ class TemplateLoader(tk.Tk):
                      layer["top"]  + layer["height"]],
                     outline=(0, 255, 0), width=2)
 
-            self._blit(img)
+            # Update UI on main thread
+            self.after(0, lambda: self._blit(img))
         except Exception as e:
             print(f"[preview error] {e}", file=sys.stderr)
+
+    def _update_preview(self):
+        """Immediate preview update (called on template load)."""
+        self._render_preview_thread()
 
     def _blit(self, img: Image.Image = None):
         if img is not None:
